@@ -1,55 +1,72 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# render.yaml — Render deployment configuration
+# render.yaml — Render deployment configuration (Docker mode)
 #
-# This file tells Render exactly how to build and run this service.
-# Commit it to your repo; Render reads it automatically when you connect
-# the repo via the dashboard or `render deploy`.
+# Previously we used `runtime: python` with a buildCommand that ran apt-get.
+# That FAILED because Render's standard Python build environment blocks apt-get.
 #
-# Docs: https://render.com/docs/blueprint-spec
+# SOLUTION: Switch to `env: docker`.
+#
+# How Docker mode works on Render:
+#   1. You push your code (including Dockerfile) to GitHub.
+#   2. Render detects `env: docker` in this file.
+#   3. Render runs: docker build -t <your-service> .
+#      → Tesseract and all system packages are installed during THIS step.
+#      → Docker gives us full root access during the build → apt-get works!
+#   4. Render runs the container, injecting $PORT as an env var.
+#   5. Our CMD reads $PORT and starts uvicorn on the correct port.
+#
+# No buildCommand or startCommand needed here — the Dockerfile handles both.
+#
+# Docs: https://render.com/docs/docker
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
   - type: web
     name: intelligent-doc-processor
-    runtime: python
-    plan: free          # upgrade to "starter" ($7/mo) for always-on + more RAM
 
-    # ── Build ──────────────────────────────────────────────────────────────────
-    # Runs once per deploy, in order:
-    #   1. Install Tesseract OCR system package (requires root — available in build env)
-    #   2. Install libtesseract-dev for PDF rendering support
-    #   3. Install Python dependencies from requirements.txt
-    #   4. Download the spaCy English language model (~12 MB)
-    buildCommand: bash build_render.sh
-      apt-get install -y tesseract-ocr libtesseract-dev &&
-      pip install -r requirements.txt &&
-      python -m spacy download en_core_web_sm
+    # ── Docker mode ────────────────────────────────────────────────────────────
+    # Tells Render: "build from Dockerfile, not from a language runtime"
+    env: docker
 
-    # ── Start ──────────────────────────────────────────────────────────────────
-    # Render injects $PORT automatically — uvicorn must bind to it.
-    # --host 0.0.0.0 = accept connections from outside the container.
-    # --workers 1    = free tier has 512 MB RAM; one worker keeps us safe.
-    #                  Increase to 2-4 on paid plans.
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    # Plan: free tier (512 MB RAM, shared CPU, sleeps after 15 min inactivity)
+    # Upgrade to "starter" ($7/mo) for always-on + dedicated CPU
+    plan: free
 
-    # ── Health check ───────────────────────────────────────────────────────────
-    # Render pings this endpoint to decide if the deploy succeeded.
-    # Returns 200 + JSON from our /health route.
+    # ── Docker image config ────────────────────────────────────────────────────
+    # dockerfilePath defaults to ./Dockerfile — no need to specify unless
+    # your Dockerfile lives in a subdirectory.
+    # dockerfilePath: ./Dockerfile   ← uncomment only if needed
+
+    # ── Health check ──────────────────────────────────────────────────────────
+    # Render pings GET /health after deploy.
+    # Returns 200 + JSON → Render marks the deploy as successful.
+    # Returns non-200 or times out → Render rolls back to the previous deploy.
     healthCheckPath: /health
 
     # ── Environment variables ─────────────────────────────────────────────────
-    # These are merged with any vars you set in the Render dashboard.
-    # Do NOT put secrets here — use the dashboard for API keys etc.
+    # These are set inside the running container.
+    # Render merges these with any vars you set in the dashboard.
+    #
+    # IMPORTANT: Do NOT put secrets here (API keys, passwords, etc.).
+    # Add secrets via the Render dashboard → Environment tab.
+    # They are encrypted at rest and never appear in your git history.
     envVars:
+      # Path to the tesseract binary.
+      # After apt-get install tesseract-ocr, the binary is on $PATH as "tesseract"
       - key: TESSERACT_CMD
-        value: tesseract         # tesseract is on PATH after apt-get install
+        value: tesseract
 
+      # spaCy English NER model (downloaded into the image during Docker build)
       - key: SPACY_MODEL
         value: en_core_web_sm
 
+      # Maximum upload size in megabytes
       - key: MAX_FILE_SIZE_MB
         value: "10"
 
+      # Runtime directories (created automatically at app startup)
+      # NOTE: These are EPHEMERAL on Render — reset on every redeploy.
+      # For persistent storage, use Render Disks or an S3-compatible bucket.
       - key: UPLOAD_DIR
         value: uploads
 

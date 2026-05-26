@@ -1,20 +1,30 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# build.sh — Render build script (alternative to inline buildCommand)
+# build_render.sh — Legacy Render build script (SUPERSEDED by Docker)
 #
-# Used automatically by render.yaml via:   buildCommand: ./build.sh
-# Can also run locally for testing:        bash build.sh
+# STATUS: This script was used when render.yaml had `runtime: python`.
+#         We have since switched to `env: docker` in render.yaml.
+#         Render now builds from the Dockerfile — this script is no longer
+#         called by Render automatically.
 #
-# Render build containers run as root with network access, so apt-get works.
+# STILL USEFUL FOR:
+#   • Testing the dependency install steps locally on a Linux machine
+#   • CI pipeline (GitHub Actions, etc.) if you want a non-Docker pipeline
+#   • Reference: shows exactly what the Dockerfile does, step by step
+#
+# To test locally on Linux/macOS:
+#   bash build_render.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
-set -e   # exit immediately on any error — fail fast during build
+set -e   # exit immediately on any error
 
-echo "==> Installing system packages..."
+echo "==> Installing system packages (requires sudo or root)..."
 apt-get update -qq
 apt-get install -y --no-install-recommends \
     tesseract-ocr \
-    libtesseract-dev
+    libtesseract-dev \
+    libgl1 \
+    libglib2.0-0
 
 echo "==> Verifying Tesseract install..."
 tesseract --version
