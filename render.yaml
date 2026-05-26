@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# render.yaml — Render deployment configuration
+#
+# This file tells Render exactly how to build and run this service.
+# Commit it to your repo; Render reads it automatically when you connect
+# the repo via the dashboard or `render deploy`.
+#
+# Docs: https://render.com/docs/blueprint-spec
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: intelligent-doc-processor
+    runtime: python
+    plan: free          # upgrade to "starter" ($7/mo) for always-on + more RAM
+
+    # ── Build ──────────────────────────────────────────────────────────────────
+    # Runs once per deploy, in order:
+    #   1. Install Tesseract OCR system package (requires root — available in build env)
+    #   2. Install libtesseract-dev for PDF rendering support
+    #   3. Install Python dependencies from requirements.txt
+    #   4. Download the spaCy English language model (~12 MB)
+    buildCommand: bash build_render.sh
+      apt-get install -y tesseract-ocr libtesseract-dev &&
+      pip install -r requirements.txt &&
+      python -m spacy download en_core_web_sm
+
+    # ── Start ──────────────────────────────────────────────────────────────────
+    # Render injects $PORT automatically — uvicorn must bind to it.
+    # --host 0.0.0.0 = accept connections from outside the container.
+    # --workers 1    = free tier has 512 MB RAM; one worker keeps us safe.
+    #                  Increase to 2-4 on paid plans.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+
+    # ── Health check ───────────────────────────────────────────────────────────
+    # Render pings this endpoint to decide if the deploy succeeded.
+    # Returns 200 + JSON from our /health route.
+    healthCheckPath: /health
+
+    # ── Environment variables ─────────────────────────────────────────────────
+    # These are merged with any vars you set in the Render dashboard.
+    # Do NOT put secrets here — use the dashboard for API keys etc.
+    envVars:
+      - key: TESSERACT_CMD
+        value: tesseract         # tesseract is on PATH after apt-get install
+
+      - key: SPACY_MODEL
+        value: en_core_web_sm
+
+      - key: MAX_FILE_SIZE_MB
+        value: "10"
+
+      - key: UPLOAD_DIR
+        value: uploads
+
+      - key: OUTPUT_DIR
+        value: outputs

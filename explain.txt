@@ -1,0 +1,302 @@
+# Intelligent Document Processor — Architecture & Logic Notes
+
+## 1. `app/core/config.py`
+
+### Purpose
+
+Centralized configuration system for the entire application.
+
+### Responsibilities
+
+* Store app settings
+* Define upload/output paths
+* Define file size limits
+* Define allowed MIME types
+* Store Tesseract OCR binary path
+* Provide reusable computed properties
+
+### Key Concepts Used
+
+* `BaseSettings` → environment-based configuration
+* `Path` → OS-independent file paths
+* `@property` → computed configuration values
+* Singleton-style shared config object
+
+### Important Logic
+
+* Human-readable MB values converted to bytes dynamically
+* `.env` support allows overriding settings without changing code
+* `Path()` ensures compatibility across Windows/Linux/macOS
+
+### Engineering Principles
+
+* Separation of configuration from business logic
+* Centralized control system
+* Avoid hardcoded values across project
+
+### Why It Matters
+
+Makes deployment, scaling, and maintenance much easier.
+
+---
+
+# 2. `app/services/base_loader.py`
+
+### Purpose
+
+Defines the common contract every document loader must follow.
+
+### Responsibilities
+
+* Enforce consistent loader interface
+* Provide shared functionality
+* Prevent inconsistent implementations
+
+### Key Concepts Used
+
+* Abstract Base Class (`ABC`)
+* `@abstractmethod`
+* Inheritance
+* Polymorphism
+* Encapsulation
+
+### Required Methods For All Loaders
+
+* `extract_text()`
+* `get_preview_image()`
+* `get_metadata()`
+
+### Shared Methods
+
+* `validate_file_exists()`
+* `get_file_size_bytes()`
+
+### Important Logic
+
+* Every loader behaves uniformly
+* Python blocks incomplete subclasses automatically
+* Shared validation avoids duplicated code
+
+### Engineering Principles
+
+* Open-Closed Principle
+* Interface/Contract enforcement
+* Fail-fast design
+
+### Why It Matters
+
+Allows adding new loaders (Excel, PPT, HTML, etc.) without changing pipeline logic.
+
+---
+
+# 3. `app/services/image_loader.py`
+
+### Purpose
+
+Processes image-based documents and extracts text using OCR.
+
+### Responsibilities
+
+* Open image files
+* Preprocess images for OCR
+* Run Tesseract OCR
+* Return cleaned preview image
+* Return image metadata
+
+### Core Pipeline
+
+Image → Preprocessing → Deskew → OCR → Extracted Text
+
+### Key Concepts Used
+
+* OpenCV preprocessing
+* OCR pipeline
+* NumPy/PIL/OpenCV interoperability
+* Image normalization
+* Computer Vision basics
+
+### Preprocessing Steps
+
+1. Open image with Pillow
+2. Convert PIL → NumPy array
+3. RGB → BGR conversion
+4. Grayscale conversion
+5. Denoising
+6. Adaptive thresholding
+7. Deskewing
+8. OCR extraction
+
+### Why Each Step Exists
+
+* Grayscale → remove color noise
+* Denoising → remove scanner artifacts
+* Thresholding → improve text contrast
+* Deskew → straighten tilted text
+
+### Important Logic
+
+* Uses adaptive thresholding for uneven lighting
+* Uses Hough transform for skew angle detection
+* Converts NumPy scalar types to Python floats for OpenCV compatibility
+
+### Engineering Principles
+
+* Modular preprocessing pipeline
+* Reusable helper methods
+* Private internal methods (`_preprocess`, `_deskew`)
+
+### Why It Matters
+
+OCR accuracy depends heavily on preprocessing quality.
+
+---
+
+# 4. `app/services/pdf_loader.py`
+
+### Purpose
+
+Processes PDFs containing either native text or scanned pages.
+
+### Responsibilities
+
+* Open PDFs safely
+* Handle password-protected PDFs
+* Extract native text
+* OCR scanned pages
+* Render preview images
+* Return PDF metadata
+
+### Core Pipeline
+
+PDF → Detect page type → Native extraction OR OCR fallback
+
+### Key Concepts Used
+
+* Hybrid extraction pipeline
+* OCR fallback systems
+* Resource management
+* Custom exceptions
+* Multi-library orchestration
+
+### Libraries Used
+
+#### `pdfplumber`
+
+Used for:
+
+* Native text extraction
+* Structured text reading
+* Tables
+
+#### `PyMuPDF (fitz)`
+
+Used for:
+
+* Rendering pages as images
+* Password handling
+* Fast low-level PDF operations
+
+### Important Logic
+
+For EACH page:
+
+1. Try native extraction using pdfplumber
+2. If no text exists:
+
+   * render page as image
+   * run OCR using Tesseract
+
+### Why This Is Important
+
+Scanned PDFs contain images, not real text.
+Native extraction fails on them.
+
+### Password Handling
+
+* Detect encrypted PDFs
+* Authenticate if password provided
+* Raise `PasswordProtectedError` if authentication fails
+
+### DPI Logic
+
+* Uses `Matrix(2.0, 2.0)` for 144 DPI rendering
+* Improves OCR sharpness significantly
+
+### Resource Management
+
+Uses:
+
+```python
+try:
+    ...
+finally:
+    fitz_doc.close()
+```
+
+This guarantees cleanup of file handles.
+
+### Engineering Principles
+
+* Fallback strategy
+* Fail-fast error handling
+* Hybrid processing systems
+* Resource cleanup
+* Custom exception design
+
+### Why It Matters
+
+Real-world PDFs are inconsistent.
+This pipeline handles both digital-native and scanned PDFs robustly.
+
+---
+
+# OVERALL SYSTEM FLOW
+
+```text
+User Upload
+    ↓
+API Layer
+    ↓
+Document Router
+    ↓
+Correct Loader Selected
+    ↓
+Preprocessing / Extraction / OCR
+    ↓
+Metadata + Preview + Text
+    ↓
+API Response
+```
+
+---
+
+# CORE SOFTWARE ENGINEERING CONCEPTS USED
+
+| Concept                | Usage In Project                              |
+| ---------------------- | --------------------------------------------- |
+| Abstraction            | `BaseLoader` contract                         |
+| Inheritance            | `PdfLoader`, `ImageLoader` inherit base class |
+| Polymorphism           | same method names, different implementations  |
+| Encapsulation          | loaders hide internal complexity              |
+| Open-Closed Principle  | easily add new loaders                        |
+| Separation of Concerns | API vs Services vs Config                     |
+| Fail-Fast Design       | immediate validation/errors                   |
+| Resource Management    | `try/finally` cleanup                         |
+| Hybrid Pipelines       | native extraction + OCR fallback              |
+
+---
+
+DOCX file
+   ↓
+Read structured content
+   ↓
+Extract paragraphs
+   ↓
+Extract tables
+   ↓
+Combine text
+   ↓
+Generate preview image
+   ↓
+Return metadata
+```
