@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Set SPACY_MODEL="" (empty string) to disable NLP and use regex-only mode.
     spacy_model: str = "en_core_web_sm"
 
+    # CORS allowed origins — comma-separated list of frontend URLs.
+    # Default "*" allows all origins (fine while allow_credentials=False).
+    # In production set: CORS_ORIGINS=https://your-app.vercel.app
+    cors_origins: str = "*"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

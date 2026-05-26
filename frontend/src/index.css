@@ -1,0 +1,50 @@
+/*
+ * index.css — the only CSS file in this project.
+ *
+ * Tailwind injects three layers:
+ *   @tailwind base     — CSS reset + sensible defaults (like box-sizing: border-box)
+ *   @tailwind components — (empty unless you add @layer components { ... } blocks)
+ *   @tailwind utilities — the ~20,000 utility classes Tailwind provides
+ *
+ * At build time, Tailwind scans all JSX files and removes every class
+ * that is NOT used. The final CSS is usually 8-20 KB.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom component classes (reusable patterns too long to repeat in JSX) */
+@layer components {
+  /* Primary button style */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700
+           text-white font-semibold text-sm rounded-lg shadow-sm
+           transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary / outline button */
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50
+           text-gray-700 font-semibold text-sm rounded-lg shadow-sm
+           ring-1 ring-gray-300 transition-colors duration-150;
+  }
+
+  /* Standard card container */
+  .card {
+    @apply bg-white rounded-xl shadow-sm ring-1 ring-gray-200 p-6;
+  }
+
+  /* Section heading */
+  .section-heading {
+    @apply text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4;
+  }
+}
+
+/* Smooth scrollbar for raw text panel */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 9999px; }

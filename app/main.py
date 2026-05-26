@@ -63,8 +63,10 @@ app = FastAPI(
 # setting CORS_ORIGINS in .env (comma-separated list).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],    # tighten to ["https://yourfrontend.com"] in prod
-    allow_credentials=False,
+    # Parse CORS_ORIGINS env var: "*" → allow all, or "https://a.vercel.app,https://b.com"
+    allow_origins=["*"] if settings.cors_origins.strip() == "*"
+                  else [o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+    allow_credentials=False,   # must stay False when allow_origins includes "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
