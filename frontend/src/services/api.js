@@ -23,7 +23,7 @@ import axios from "axios";
 
 // In development, VITE_API_URL is empty and the Vite proxy handles routing.
 // In production (Vercel), VITE_API_URL = "https://your-app.onrender.com"
-const BASE_URL = import.meta.env.VITE_API_URL || "";
+const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const client = axios.create({
   baseURL: BASE_URL,
